@@ -1,82 +1,96 @@
 pipeline {
-    agent any 
-    
-    tools{
-        jdk 'jdk11'
+    agent any
+
+    tools { 
+        jdk 'jdk17'
         maven 'maven3'
     }
     
     environment {
-        SCANNER_HOME=tool 'sonar-scanner'
+        SCANNER_HOME= tool 'sonar-scanner'
     }
     
-    stages{
-        
-        stage("Git Checkout"){
-            steps{
-                git branch: 'main', changelog: false, poll: false, url: 'https://github.com/jaiswaladi246/Petclinic.git'
+    
+    stages {
+        stage('Git Checkout') {
+            steps {
+                git branch: 'main', changelog: false, poll: false, url: 'https://github.com/Utsav-7/Petclinic-cicd.git'
             }
         }
         
-        stage("Compile"){
-            steps{
+        stage('Code Compile') {
+            steps {
                 sh "mvn clean compile"
             }
         }
         
-         stage("Test Cases"){
-            steps{
+        stage('Unit Tests') {
+            steps {
                 sh "mvn test"
             }
         }
         
-        stage("Sonarqube Analysis "){
-            steps{
+        
+        stage('Sonarqube Anlysis') {
+            steps {
                 withSonarQubeEnv('sonar-server') {
-                    sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=Petclinic \
+                    sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=Petclinic-cicd \
                     -Dsonar.java.binaries=. \
-                    -Dsonar.projectKey=Petclinic '''
-    
+                    -Dsonar.projectKey=Petclinic-cicd '''
                 }
             }
         }
         
-        stage("OWASP Dependency Check"){
-            steps{
-                dependencyCheck additionalArguments: '--scan ./ --format HTML ', odcInstallation: 'DP'
+        
+         stage('OWASP Scan') {
+            steps {
+                dependencyCheck additionalArguments: ' --scan ./ ', odcInstallation: 'DP-Check'
                 dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
             }
         }
         
-         stage("Build"){
-            steps{
-                sh " mvn clean install"
+        stage('Build Artifact') {
+            steps {
+                sh "mvn clean install"
             }
         }
         
-        stage("Docker Build & Push"){
-            steps{
-                script{
-                   withDockerRegistry(credentialsId: '58be877c-9294-410e-98ee-6a959d73b352', toolName: 'docker') {
-                        
-                        sh "docker build -t image1 ."
-                        sh "docker tag image1 adijaiswal/pet-clinic123:latest "
-                        sh "docker push adijaiswal/pet-clinic123:latest "
+        
+        stage('Docker Build') {
+            steps {
+                script {
+                    withDockerRegistry(credentialsId: '8cc70f5e-0cb6-493b-8322-74ff20547e43', toolName: 'docker') {
+                        sh "docker build -t petclinic1 ."
                     }
                 }
             }
         }
         
-        stage("TRIVY"){
-            steps{
-                sh " trivy image adijaiswal/pet-clinic123:latest"
+        
+        stage('DockerTag & Push') {
+            steps {
+                script {
+                    withDockerRegistry(credentialsId: '8cc70f5e-0cb6-493b-8322-74ff20547e43', toolName: 'docker') {
+                        
+                        sh "docker tag petclinic1 utsav0712/pet-clinic25:latest"
+                        sh "docker push utsav0712/pet-clinic25:latest"
+                        
+                    }
+                }
             }
         }
         
-        stage("Deploy To Tomcat"){
-            steps{
-                sh "cp  /var/lib/jenkins/workspace/CI-CD/target/petclinic.war /opt/apache-tomcat-9.0.65/webapps/ "
+        stage('Trivy Docker Scan') { 
+            steps {
+                sh "trivy image utsav0712/pet-clinic25:latest"
             }
         }
+        
+        stage('Deploy using Docker') { 
+            steps {
+                sh "docker run -d --name pet1 -p 8082:8082 utsav0712/pet-clinic25:latest"
+            }
+        }
+        
     }
 }
